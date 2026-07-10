@@ -310,10 +310,10 @@
     <div class="chart-box"><h3>สภาพตัวถัง</h3><canvas id="pieCondition"></canvas></div>
     <div class="chart-box"><h3>ตัวถังผุ / สีหลุด</h3><canvas id="pieRust"></canvas></div>
   </div>
-  <!-- Charts Row 3 — Rust by Route -->
+  <!-- Charts Row 3 — Rust by Model -->
   <div class="charts-grid-2" id="rustChartRow" style="display:none">
-    <div class="chart-box"><h3>🎨 % สีหลุด ต่อสายรถ (Top 15)</h3><canvas id="barRustRoute" style="max-height:300px"></canvas></div>
-    <div class="chart-box"><h3>🎨 จำนวนสีหลุด ต่ออู่ (Top 10)</h3><canvas id="barRustDepot" style="max-height:300px"></canvas></div>
+    <div class="chart-box"><h3>🎨 รุ่นรถ ที่มีสีหลุด (Top 15)</h3><canvas id="barRustRoute" style="max-height:300px"></canvas></div>
+    <div class="chart-box"><h3>🎨 จำนวนสีหลุด แยกประเภท</h3><canvas id="barRustDepot" style="max-height:300px"></canvas></div>
   </div>
 
   <!-- Table -->
@@ -575,7 +575,7 @@ function renderCards() {
   const pct = total ? Math.round(doneCount/total*100) : 0;
 
   // รถสีหลุด — rust field ไม่ว่างและไม่ใช่ "ไม่มี"
-  const rustRows = filteredData.filter(r=> r.rust && r.rust.trim() !== '' && !r.rust.includes('ไม่มี'));
+  const rustRows = filteredData.filter(r=> r.rust && r.rust.trim() !== '' && !r.rust.includes('ไม่มี') && !r.rust.includes('ปกติ'));
   const rustCount = rustRows.length;
   const rustPct = total ? Math.round(rustCount/total*100) : 0;
 
@@ -584,24 +584,6 @@ function renderCards() {
       <div class="card-label">รายการทั้งหมด</div>
       <div class="card-value">${total.toLocaleString()}</div>
       <div class="card-sub">${rangeName}</div>
-    </div>
-    <div class="card c-nostat" onclick="filterStatus('')">
-      <div class="card-label"><span class="alert-dot"></span>ไม่มีสถานะ</div>
-      <div class="card-value">${noStat.toLocaleString()}</div>
-      <div class="card-sub">${total?Math.round(noStat/total*100):0}%</div>
-    </div>
-    <div class="card" style="border-left-color:#1565c0;grid-column:span 2">
-      <div class="card-label">ความคืบหน้า</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin:4px 0">
-        <div style="font-size:26px;font-weight:700;color:#1565c0;line-height:1">${pct}%</div>
-        <div style="font-size:11px;color:#aaa">เสร็จ ${doneCount.toLocaleString()} / ${total.toLocaleString()} คัน</div>
-      </div>
-      <div style="background:#e8eaf6;border-radius:99px;height:10px;overflow:hidden;margin-top:6px">
-        <div style="background:linear-gradient(90deg,#1a237e,#42a5f5);height:100%;width:${pct}%;border-radius:99px;transition:width 0.6s ease"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-top:4px">
-        <span>รอดำเนินการ ${(total-doneCount).toLocaleString()} คัน</span><span>${pct}% สำเร็จ</span>
-      </div>
     </div>
     <div class="card" style="border-left-color:#e65100;cursor:pointer" onclick="filterRust()">
       <div class="card-label">🎨 ตัวถังผุ / สีหลุด</div>
@@ -612,7 +594,7 @@ function renderCards() {
   // Rust breakdown cards
   const allMapped = allData.map(mapRow);
   const byRust = {};
-  allMapped.forEach(r=>{ if(r.rust && r.rust.trim()!==''){ const k=r.rust.trim(); byRust[k]=(byRust[k]||0)+1; } });
+  allMapped.forEach(r=>{ if(r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี') && !r.rust.includes('ปกติ')){ const k=r.rust.trim(); byRust[k]=(byRust[k]||0)+1; } });
   const totalAll = allMapped.length;
   const rustBreakEl = document.getElementById('rustBreakdown');
   const rustCardsEl = document.getElementById('rustCards');
@@ -638,6 +620,20 @@ function renderCards() {
       <div class="card-sub">${total?Math.round(n/total*100):0}%</div>
     </div>`;
   });
+  h += `
+    <div class="card" style="border-left-color:#1565c0;grid-column:span 2">
+      <div class="card-label">ความคืบหน้า</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:4px 0">
+        <div style="font-size:26px;font-weight:700;color:#1565c0;line-height:1">${pct}%</div>
+        <div style="font-size:11px;color:#aaa">เสร็จ ${doneCount.toLocaleString()} / ${total.toLocaleString()} คัน</div>
+      </div>
+      <div style="background:#e8eaf6;border-radius:99px;height:10px;overflow:hidden;margin-top:6px">
+        <div style="background:linear-gradient(90deg,#1a237e,#42a5f5);height:100%;width:${pct}%;border-radius:99px;transition:width 0.6s ease"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-top:4px">
+        <span>รอดำเนินการ ${(total-doneCount).toLocaleString()} คัน</span><span>${pct}% สำเร็จ</span>
+      </div>
+    </div>`;
   document.getElementById('cards').innerHTML = h;
   const rangeLabel = {today:'วันนี้',week:'7 วันล่าสุด',month:'เดือนนี้',all:'ทั้งหมด',custom:'ช่วงที่เลือก'}[dateRange];
   document.getElementById('tableTitle').textContent = `รายละเอียด — ${rangeLabel} (${total.toLocaleString()} รายการ)`;
@@ -732,31 +728,29 @@ function renderCharts() {
   const byRust = countBy(filteredData, r=>r.rust);
   makeChart('pieRust','doughnut',Object.keys(byRust),Object.values(byRust));
 
-  // Rust by Route — % สีหลุดต่อสายรถ (Top 15)
+  // Rust by BusModel — รุ่นรถที่มีสีหลุด (Top 15)
   const allM = allData.map(mapRow);
-  const routeTotal = {}, routeRust = {};
+  const modelRust = {};
   allM.forEach(r=>{
-    const k = r.route||'(ไม่ระบุ)';
-    routeTotal[k] = (routeTotal[k]||0)+1;
-    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี')) routeRust[k]=(routeRust[k]||0)+1;
-  });
-  const routePct = Object.entries(routeRust)
-    .map(([k,v])=>({route:k, pct:routeTotal[k]?Math.round(v/routeTotal[k]*100):0, count:v}))
-    .sort((a,b)=>b.pct-a.pct).slice(0,15);
-  makeChart('barRustRoute','bar',routePct.map(x=>`${x.route} (${x.count})`),routePct.map(x=>x.pct),{
-    color:'#e65100',
-    extra:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%',font:{size:10}}},y:{ticks:{font:{size:9}}}}}
-  });
-
-  // Rust by Depot — จำนวนสีหลุดต่ออู่ (Top 10)
-  const depotRust = {};
-  allM.forEach(r=>{
-    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี')){
-      const k=r.depot||'(ไม่ระบุ)'; depotRust[k]=(depotRust[k]||0)+1;
+    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี') && !r.rust.includes('ปกติ')){
+      const k=r.busModel||'(ไม่ระบุ)'; modelRust[k]=(modelRust[k]||0)+1;
     }
   });
-  const topDepotRust = Object.entries(depotRust).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  makeChart('barRustDepot','bar',topDepotRust.map(x=>x[0]),topDepotRust.map(x=>x[1]),{
+  const topModelRust = Object.entries(modelRust).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  makeChart('barRustRoute','bar',topModelRust.map(x=>x[0]),topModelRust.map(x=>x[1]),{
+    color:'#e65100',
+    extra:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,font:{size:10}}},y:{ticks:{font:{size:9}}}}}
+  });
+
+  // Rust by Type — จำนวนสีหลุดแยกประเภท
+  const rustTypeCount = {};
+  allM.forEach(r=>{
+    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี') && !r.rust.includes('ปกติ')){
+      const k=r.rust.trim(); rustTypeCount[k]=(rustTypeCount[k]||0)+1;
+    }
+  });
+  const topRustType = Object.entries(rustTypeCount).sort((a,b)=>b[1]-a[1]);
+  makeChart('barRustDepot','bar',topRustType.map(x=>x[0]),topRustType.map(x=>x[1]),{
     color:'#bf360c',
     extra:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,font:{size:10}}},y:{ticks:{font:{size:9}}}}}
   });
@@ -772,7 +766,7 @@ function renderTable() {
   let data = [...filteredData];
   if (search) data = data.filter(r=>[r.plate,r.product,r.route,r.depot,r.responsible,r.status,r.busNo,r.mediaType].some(v=>(v||'').toLowerCase().includes(search)));
   if (alertOnly) data = data.filter(r=>!r.status);
-  if (rustOnly) data = data.filter(r=>r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี'));
+  if (rustOnly) data = data.filter(r=>r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี') && !r.rust.includes('ปกติ'));
 
   data.sort((a,b)=>{
     let av=a[sortCol], bv=b[sortCol];
