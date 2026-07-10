@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>รายงานสถานะการอัปเดทข้อมูล รายวัน</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; color: #333; font-size: 14px; }
@@ -674,16 +675,17 @@ const doughnutCenterPlugin = {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 18px Segoe UI, sans-serif';
-    ctx.fillStyle = '#333';
-    ctx.fillText(total.toLocaleString(), cx, cy - 8);
+    ctx.font = 'bold 22px Segoe UI, sans-serif';
+    ctx.fillStyle = '#1a237e';
+    ctx.fillText(total.toLocaleString(), cx, cy - 9);
     ctx.font = '11px Segoe UI, sans-serif';
-    ctx.fillStyle = '#aaa';
-    ctx.fillText('ทั้งหมด', cx, cy + 10);
+    ctx.fillStyle = '#999';
+    ctx.fillText('ทั้งหมด', cx, cy + 11);
     ctx.restore();
   }
 };
 Chart.register(doughnutCenterPlugin);
+Chart.register(ChartDataLabels);
 
 function makeChart(id, type, labels, data, opts={}) {
   if (charts[id]) charts[id].destroy();
@@ -705,7 +707,24 @@ function makeChart(id, type, labels, data, opts={}) {
           position: type==='bar'?'top':'right',
           labels:{font:{size:10}, boxWidth:12}
         },
-        tooltip:{}
+        tooltip:{},
+        datalabels: type === 'doughnut' ? {
+          color: '#fff',
+          font: { size: 14, weight: 'bold' },
+          textShadowBlur: 4,
+          textShadowColor: 'rgba(0,0,0,0.4)',
+          formatter(value, ctx) {
+            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+(b||0),0);
+            if (!total || !value) return null;
+            const pct = Math.round(value / total * 100);
+            return pct < 4 ? null : `${value}\n(${pct}%)`;
+          },
+          display(ctx) {
+            const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+(b||0),0);
+            const value = ctx.dataset.data[ctx.dataIndex] || 0;
+            return total ? (value / total) >= 0.04 : false;
+          },
+        } : false,
       },
       scales: type==='bar' ? { y:{ beginAtZero:true, ticks:{precision:0, font:{size:10}} }, x:{ticks:{font:{size:10}}} } : undefined,
       maintainAspectRatio: true,
