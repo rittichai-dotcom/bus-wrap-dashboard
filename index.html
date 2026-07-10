@@ -289,6 +289,15 @@
   <!-- KPI Cards -->
   <div class="cards" id="cards"></div>
 
+  <!-- Rust Breakdown -->
+  <div id="rustBreakdown" style="display:none;background:white;border-radius:10px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:16px;border-left:4px solid #e65100">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 style="font-size:13px;font-weight:600;color:#e65100;margin:0">🎨 รายละเอียดตัวถังผุ / สีหลุด</h3>
+      <button onclick="clearRustFilter()" style="font-size:11px;padding:3px 10px;border:1px solid #ddd;border-radius:6px;background:white;cursor:pointer;color:#555">ล้างตัวกรอง</button>
+    </div>
+    <div id="rustCards" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+  </div>
+
   <!-- Charts Row 1 -->
   <div class="charts-grid">
     <div class="chart-box"><h3>สัดส่วนสถานะ</h3><canvas id="pieStatus"></canvas></div>
@@ -301,6 +310,11 @@
     <div class="chart-box"><h3>สภาพตัวถัง</h3><canvas id="pieCondition"></canvas></div>
     <div class="chart-box"><h3>ตัวถังผุ / สีหลุด</h3><canvas id="pieRust"></canvas></div>
   </div>
+  <!-- Charts Row 3 — Rust by Route -->
+  <div class="charts-grid-2" id="rustChartRow" style="display:none">
+    <div class="chart-box"><h3>🎨 % สีหลุด ต่อสายรถ (Top 15)</h3><canvas id="barRustRoute" style="max-height:300px"></canvas></div>
+    <div class="chart-box"><h3>🎨 จำนวนสีหลุด ต่ออู่ (Top 10)</h3><canvas id="barRustDepot" style="max-height:300px"></canvas></div>
+  </div>
 
   <!-- Table -->
   <div class="table-box">
@@ -310,6 +324,9 @@
         <input class="search-input" id="searchInput" placeholder="🔍 ค้นหา ทะเบียน / สินค้า / สาย…" oninput="renderTable()" />
         <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:4px;">
           <input type="checkbox" id="alertOnly" onchange="renderTable()" /> ไม่มีสถานะเท่านั้น
+        </label>
+        <label style="font-size:12px;color:#e65100;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="rustOnly" onchange="renderTable()" /> 🎨 สีหลุดเท่านั้น
         </label>
       </div>
     </div>
@@ -589,8 +606,30 @@ function renderCards() {
     <div class="card" style="border-left-color:#e65100;cursor:pointer" onclick="filterRust()">
       <div class="card-label">🎨 ตัวถังผุ / สีหลุด</div>
       <div class="card-value" style="color:#e65100">${rustCount.toLocaleString()}</div>
-      <div class="card-sub">${rustPct}% ของทั้งหมด</div>
+      <div class="card-sub">${rustPct}% ของทั้งหมด — คลิกดูรายละเอียด</div>
     </div>`;
+
+  // Rust breakdown cards
+  const allMapped = allData.map(mapRow);
+  const byRust = {};
+  allMapped.forEach(r=>{ if(r.rust && r.rust.trim()!==''){ const k=r.rust.trim(); byRust[k]=(byRust[k]||0)+1; } });
+  const totalAll = allMapped.length;
+  const rustBreakEl = document.getElementById('rustBreakdown');
+  const rustCardsEl = document.getElementById('rustCards');
+  if (Object.keys(byRust).length > 0) {
+    rustBreakEl.style.display = 'block';
+    document.getElementById('rustChartRow').style.display = '';
+    const RUST_COLORS = ['#e65100','#bf360c','#f57f17','#6d4c41','#4e342e','#c62828','#ad1457','#6a1b9a','#1565c0','#2e7d32'];
+    rustCardsEl.innerHTML = Object.entries(byRust).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=>`
+      <div onclick="filterRustType('${k}')" style="cursor:pointer;background:#fff8f5;border:1px solid #ffccbc;border-radius:8px;padding:8px 14px;min-width:90px;text-align:center;transition:background 0.15s" onmouseover="this.style.background='#ffe0cc'" onmouseout="this.style.background='#fff8f5'">
+        <div style="font-size:10px;color:#888;margin-bottom:2px">${k}</div>
+        <div style="font-size:20px;font-weight:700;color:${RUST_COLORS[i%RUST_COLORS.length]}">${v}</div>
+        <div style="font-size:10px;color:#aaa">${totalAll?Math.round(v/totalAll*100):0}%</div>
+      </div>`).join('');
+  } else {
+    rustBreakEl.style.display = 'none';
+    document.getElementById('rustChartRow').style.display = 'none';
+  }
   topStatuses.forEach(([s,n])=>{
     const cls = statusCls(s);
     h += `<div class="card c-${cls}" onclick="filterStatus('${s}')">
@@ -606,13 +645,20 @@ function renderCards() {
 function filterStatus(s){ document.getElementById('statusFilter').value=s; renderAll(); }
 function clearStatusFilter(){ document.getElementById('statusFilter').value=''; renderAll(); }
 function filterRust() {
-  // กรองเฉพาะรถที่มีข้อมูล ตัวถังผุ/สีหลุด
-  const search = document.getElementById('searchInput');
-  search.value = '';
+  document.getElementById('rustOnly').checked = true;
+  renderTable();
+  document.getElementById('dataTable').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function filterRustType(type) {
   applyFilters();
-  filteredData = filteredData.filter(r => r.rust && r.rust.trim() !== '' && !r.rust.includes('ไม่มี'));
+  filteredData = filteredData.filter(r => r.rust && r.rust.trim() === type);
   renderCards(); renderCharts(); currentPage=1; renderTable();
-  document.getElementById('tableTitle').textContent = `รายละเอียด — ตัวถังผุ/สีหลุด (${filteredData.length.toLocaleString()} รายการ)`;
+  document.getElementById('tableTitle').textContent = `รายละเอียด — สีหลุด: ${type} (${filteredData.length.toLocaleString()} รายการ)`;
+  document.getElementById('dataTable').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function clearRustFilter() {
+  document.getElementById('rustOnly').checked = false;
+  renderAll();
 }
 
 // ── CHARTS ────────────────────────────────────────────
@@ -685,6 +731,35 @@ function renderCharts() {
   // Rust pie
   const byRust = countBy(filteredData, r=>r.rust);
   makeChart('pieRust','doughnut',Object.keys(byRust),Object.values(byRust));
+
+  // Rust by Route — % สีหลุดต่อสายรถ (Top 15)
+  const allM = allData.map(mapRow);
+  const routeTotal = {}, routeRust = {};
+  allM.forEach(r=>{
+    const k = r.route||'(ไม่ระบุ)';
+    routeTotal[k] = (routeTotal[k]||0)+1;
+    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี')) routeRust[k]=(routeRust[k]||0)+1;
+  });
+  const routePct = Object.entries(routeRust)
+    .map(([k,v])=>({route:k, pct:routeTotal[k]?Math.round(v/routeTotal[k]*100):0, count:v}))
+    .sort((a,b)=>b.pct-a.pct).slice(0,15);
+  makeChart('barRustRoute','bar',routePct.map(x=>`${x.route} (${x.count})`),routePct.map(x=>x.pct),{
+    color:'#e65100',
+    extra:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,max:100,ticks:{callback:v=>v+'%',font:{size:10}}},y:{ticks:{font:{size:9}}}}}
+  });
+
+  // Rust by Depot — จำนวนสีหลุดต่ออู่ (Top 10)
+  const depotRust = {};
+  allM.forEach(r=>{
+    if (r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี')){
+      const k=r.depot||'(ไม่ระบุ)'; depotRust[k]=(depotRust[k]||0)+1;
+    }
+  });
+  const topDepotRust = Object.entries(depotRust).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  makeChart('barRustDepot','bar',topDepotRust.map(x=>x[0]),topDepotRust.map(x=>x[1]),{
+    color:'#bf360c',
+    extra:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0,font:{size:10}}},y:{ticks:{font:{size:9}}}}}
+  });
 }
 
 // ── TABLE ─────────────────────────────────────────────
@@ -693,9 +768,11 @@ function sortBy(col) { if(sortCol===col) sortAsc=!sortAsc; else{sortCol=col;sort
 function renderTable() {
   const search = (document.getElementById('searchInput').value||'').toLowerCase();
   const alertOnly = document.getElementById('alertOnly').checked;
+  const rustOnly = document.getElementById('rustOnly').checked;
   let data = [...filteredData];
   if (search) data = data.filter(r=>[r.plate,r.product,r.route,r.depot,r.responsible,r.status,r.busNo,r.mediaType].some(v=>(v||'').toLowerCase().includes(search)));
   if (alertOnly) data = data.filter(r=>!r.status);
+  if (rustOnly) data = data.filter(r=>r.rust && r.rust.trim()!=='' && !r.rust.includes('ไม่มี'));
 
   data.sort((a,b)=>{
     let av=a[sortCol], bv=b[sortCol];
