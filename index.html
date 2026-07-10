@@ -553,6 +553,15 @@ function renderCards() {
   const topStatuses = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).slice(0,5);
   const rangeName = {today:'วันนี้',week:'7 วันล่าสุด',month:'เดือนนี้',all:'ทั้งหมด',custom:'ช่วงที่เลือก'}[dateRange]||'';
 
+  // คำนวณ progress
+  const doneCount = filteredData.filter(r=>statusCls(r.status)==='done').length;
+  const pct = total ? Math.round(doneCount/total*100) : 0;
+
+  // รถสีหลุด — rust field ไม่ว่างและไม่ใช่ "ไม่มี"
+  const rustRows = filteredData.filter(r=> r.rust && r.rust.trim() !== '' && !r.rust.includes('ไม่มี'));
+  const rustCount = rustRows.length;
+  const rustPct = total ? Math.round(rustCount/total*100) : 0;
+
   let h = `
     <div class="card c-total" onclick="clearStatusFilter()">
       <div class="card-label">รายการทั้งหมด</div>
@@ -563,6 +572,24 @@ function renderCards() {
       <div class="card-label"><span class="alert-dot"></span>ไม่มีสถานะ</div>
       <div class="card-value">${noStat.toLocaleString()}</div>
       <div class="card-sub">${total?Math.round(noStat/total*100):0}%</div>
+    </div>
+    <div class="card" style="border-left-color:#1565c0;grid-column:span 2">
+      <div class="card-label">ความคืบหน้า</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin:4px 0">
+        <div style="font-size:26px;font-weight:700;color:#1565c0;line-height:1">${pct}%</div>
+        <div style="font-size:11px;color:#aaa">เสร็จ ${doneCount.toLocaleString()} / ${total.toLocaleString()} คัน</div>
+      </div>
+      <div style="background:#e8eaf6;border-radius:99px;height:10px;overflow:hidden;margin-top:6px">
+        <div style="background:linear-gradient(90deg,#1a237e,#42a5f5);height:100%;width:${pct}%;border-radius:99px;transition:width 0.6s ease"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#aaa;margin-top:4px">
+        <span>รอดำเนินการ ${(total-doneCount).toLocaleString()} คัน</span><span>${pct}% สำเร็จ</span>
+      </div>
+    </div>
+    <div class="card" style="border-left-color:#e65100;cursor:pointer" onclick="filterRust()">
+      <div class="card-label">🎨 ตัวถังผุ / สีหลุด</div>
+      <div class="card-value" style="color:#e65100">${rustCount.toLocaleString()}</div>
+      <div class="card-sub">${rustPct}% ของทั้งหมด</div>
     </div>`;
   topStatuses.forEach(([s,n])=>{
     const cls = statusCls(s);
@@ -578,6 +605,15 @@ function renderCards() {
 }
 function filterStatus(s){ document.getElementById('statusFilter').value=s; renderAll(); }
 function clearStatusFilter(){ document.getElementById('statusFilter').value=''; renderAll(); }
+function filterRust() {
+  // กรองเฉพาะรถที่มีข้อมูล ตัวถังผุ/สีหลุด
+  const search = document.getElementById('searchInput');
+  search.value = '';
+  applyFilters();
+  filteredData = filteredData.filter(r => r.rust && r.rust.trim() !== '' && !r.rust.includes('ไม่มี'));
+  renderCards(); renderCharts(); currentPage=1; renderTable();
+  document.getElementById('tableTitle').textContent = `รายละเอียด — ตัวถังผุ/สีหลุด (${filteredData.length.toLocaleString()} รายการ)`;
+}
 
 // ── CHARTS ────────────────────────────────────────────
 const COLORS = ['#1a237e','#2e7d32','#f57f17','#c62828','#0277bd','#6a1b9a','#00695c','#4e342e','#558b2f','#ad1457','#00838f','#ef6c00'];
