@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>รายงานสถานะการอัปเดทข้อมูล รายวัน</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f2f5; color: #333; font-size: 14px; }
+
+    header {
+      background: linear-gradient(135deg, #1a237e, #283593);
+      color: white; padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size: 18px; font-weight: 600; }
+    header .subtitle { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .btn {
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; display: flex; align-items: center; gap: 6px;
+      border: 1px solid rgba(255,255,255,0.3); color: white;
+      background: rgba(255,255,255,0.15); transition: background 0.2s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.25); }
+    .btn-green { background: #2e7d32; border-color: #2e7d32; }
+    .btn-green:hover { background: #1b5e20; }
+
+    .container { max-width: 1500px; margin: 0 auto; padding: 16px 20px; }
+
+    /* Controls */
+    .controls {
+      background: white; border-radius: 10px; padding: 12px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 16px;
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    }
+    .controls label { font-weight: 600; color: #555; font-size: 12px; white-space: nowrap; }
+    .controls select, .controls input[type="date"] {
+      padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 12px; background: white; color: #333;
+    }
+    .tab-group { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #ddd; }
+    .tab-group button {
+      padding: 6px 14px; border: none; background: white; cursor: pointer;
+      font-size: 12px; color: #555; border-right: 1px solid #ddd; transition: background 0.2s;
+    }
+    .tab-group button:last-child { border-right: none; }
+    .tab-group button.active { background: #1a237e; color: white; font-weight: 600; }
+    .filter-btn {
+      padding: 6px 12px; border: 1px solid #1a237e; border-radius: 6px;
+      background: #1a237e; color: white; cursor: pointer; font-size: 12px;
+    }
+    .divider { width: 1px; height: 24px; background: #ddd; margin: 0 4px; }
+
+    /* Banner */
+    .status-banner {
+      border-radius: 8px; padding: 9px 14px; margin-bottom: 14px;
+      font-size: 12px; display: flex; align-items: center; gap: 8px;
+      background: #e8f5e9; border: 1px solid #a5d6a7; color: #2e7d32;
+    }
+    .status-banner.loading { background: #fff8e1; border-color: #ffe082; color: #f57f17; }
+    .status-banner.error   { background: #ffebee; border-color: #ef9a9a; color: #c62828; }
+
+    /* KPI Cards */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .card {
+      background: white; border-radius: 10px; padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); border-left: 4px solid #90a4ae;
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .card.c-total   { border-color: #1a237e; }
+    .card.c-nostat  { border-color: #e53935; }
+    .card.c-done    { border-color: #2e7d32; }
+    .card.c-pending { border-color: #f57f17; }
+    .card.c-cancel  { border-color: #c62828; }
+    .card.c-inprog  { border-color: #0277bd; }
+    .card-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .card-value { font-size: 26px; font-weight: 700; color: #333; line-height: 1; }
+    .card-sub   { font-size: 10px; color: #aaa; margin-top: 4px; }
+
+    /* Charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px; margin-bottom: 16px;
+    }
+    .charts-grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px; margin-bottom: 16px;
+    }
+    @media (max-width: 900px) { .charts-grid, .charts-grid-2 { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .charts-grid, .charts-grid-2 { grid-template-columns: 1fr; } }
+    .chart-box {
+      background: white; border-radius: 10px; padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .chart-box h3 { font-size: 12px; font-weight: 600; color: #555; margin-bottom: 10px; }
+    .chart-box canvas { max-height: 200px; }
+
+    /* Table */
+    .table-box { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; }
+    .table-box-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+    .table-box-header h3 { font-size: 14px; font-weight: 600; color: #333; }
+    .table-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .search-input { padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; width: 200px; }
+    .export-btn {
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+      border: 1px solid #ddd; background: white; color: #333; transition: background 0.15s;
+    }
+    .export-btn:hover { background: #f5f5f5; }
+
+    .table-wrapper { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    thead { background: #f5f7fa; position: sticky; top: 0; z-index: 1; }
+    th { padding: 8px 10px; text-align: left; font-weight: 600; color: #555; border-bottom: 2px solid #e0e0e0; white-space: nowrap; cursor: pointer; user-select: none; }
+    th:hover { background: #e8eaf6; }
+    td { padding: 7px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; white-space: nowrap; }
+    tr:hover td { background: #f5f7fa; cursor: pointer; }
+    tr.no-status td { background: #fff8f8; }
+    tr.no-status:hover td { background: #ffebee; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+    .badge-done    { background: #e8f5e9; color: #2e7d32; }
+    .badge-pending { background: #fff8e1; color: #f57f17; }
+    .badge-cancel  { background: #ffebee; color: #c62828; }
+    .badge-inprog  { background: #e3f2fd; color: #0277bd; }
+    .badge-other   { background: #f3e5f5; color: #6a1b9a; }
+    .badge-nostat  { background: #ffebee; color: #e53935; border: 1px dashed #e53935; }
+    .alert-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #e53935; margin-right: 4px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    .pagination { display: flex; gap: 5px; align-items: center; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+    .pagination button { padding: 4px 9px; border: 1px solid #ddd; border-radius: 5px; background: white; cursor: pointer; font-size: 11px; color: #333; }
+    .pagination button.active { background: #1a237e; color: white; border-color: #1a237e; }
+    .pagination button:disabled { opacity: 0.4; cursor: default; }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white; border-radius: 12px; width: 700px; max-width: 95vw;
+      max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      position: sticky; top: 0; background: #1a237e; color: white;
+      padding: 14px 18px; border-radius: 12px 12px 0 0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-header h2 { font-size: 15px; }
+    .modal-close { background: none; border: none; color: white; font-size: 20px; cursor: pointer; line-height: 1; }
+    .modal-body { padding: 18px; }
+    .modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-field { padding: 8px 10px; background: #f9f9f9; border-radius: 6px; }
+    .modal-field-label { font-size: 10px; color: #888; margin-bottom: 3px; }
+    .modal-field-value { font-size: 13px; color: #333; font-weight: 500; }
+    .modal-field.full { grid-column: 1 / -1; }
+    .modal-section { font-size: 11px; font-weight: 700; color: #1a237e; text-transform: uppercase; letter-spacing: 0.5px; margin: 14px 0 8px; grid-column: 1 / -1; border-bottom: 1px solid #e8eaf6; padding-bottom: 4px; }
+
+    .no-data { text-align: center; padding: 30px; color: #aaa; font-size: 13px; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.1); border-top-color: #1a237e; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .last-updated { font-size: 10px; color: #bbb; margin-top: 6px; }
+
+    /* AI Chat */
+    #aiBtn {
+      position: fixed; bottom: 28px; right: 28px; z-index: 900;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg,#1a237e,#3949ab);
+      color: white; font-size: 24px; border: none; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(26,35,126,0.45);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    #aiBtn:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(26,35,126,0.55); }
+    #aiPanel {
+      position: fixed; bottom: 96px; right: 28px; z-index: 901;
+      width: 380px; max-width: calc(100vw - 40px);
+      background: white; border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+      display: none; flex-direction: column; overflow: hidden;
+      max-height: 520px;
+    }
+    #aiPanel.open { display: flex; }
+    .ai-header {
+      background: linear-gradient(135deg,#1a237e,#3949ab);
+      color: white; padding: 14px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .ai-header h4 { margin: 0; font-size: 14px; }
+    .ai-header span { font-size: 11px; opacity: 0.75; }
+    .ai-close { background: none; border: none; color: white; font-size: 18px; cursor: pointer; line-height: 1; }
+    .ai-key-bar {
+      padding: 8px 12px; background: #f9f9f9; border-bottom: 1px solid #eee;
+      display: flex; gap: 6px; align-items: center;
+    }
+    .ai-key-bar input {
+      flex: 1; font-size: 11px; padding: 5px 8px;
+      border: 1px solid #ddd; border-radius: 6px; font-family: monospace;
+    }
+    .ai-key-bar button {
+      padding: 5px 10px; font-size: 11px; border-radius: 6px;
+      background: #1a237e; color: white; border: none; cursor: pointer;
+    }
+    .ai-messages {
+      flex: 1; overflow-y: auto; padding: 12px;
+      display: flex; flex-direction: column; gap: 10px;
+      background: #f7f8fc;
+    }
+    .ai-msg { max-width: 88%; font-size: 12px; line-height: 1.55; }
+    .ai-msg.bot { align-self: flex-start; }
+    .ai-msg.user { align-self: flex-end; }
+    .ai-bubble {
+      padding: 9px 13px; border-radius: 14px; white-space: pre-wrap;
+    }
+    .ai-msg.bot .ai-bubble  { background: white; color: #333; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+    .ai-msg.user .ai-bubble { background: #1a237e; color: white; border-bottom-right-radius: 4px; }
+    .ai-typing { font-size: 11px; color: #aaa; padding: 2px 4px; }
+    .ai-footer { padding: 10px 12px; border-top: 1px solid #eee; display: flex; gap: 8px; }
+    .ai-footer input {
+      flex: 1; font-size: 12px; padding: 8px 12px;
+      border: 1px solid #ddd; border-radius: 20px; outline: none;
+    }
+    .ai-footer input:focus { border-color: #3949ab; }
+    .ai-footer button {
+      padding: 8px 14px; background: #1a237e; color: white;
+      border: none; border-radius: 20px; cursor: pointer; font-size: 12px;
+    }
+    .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 10px; }
+    .ai-chip {
+      font-size: 11px; padding: 4px 10px; border-radius: 14px;
+      background: #e8eaf6; color: #1a237e; cursor: pointer; border: none;
+      transition: background 0.15s;
+    }
+    .ai-chip:hover { background: #c5cae9; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 รายงานสถานะการอัปเดทข้อมูล รายวัน</h1>
+    <div class="subtitle">Bus Wrap Advertisement Schedule – Plan B Media</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-green" onclick="exportCSV()">⬇ CSV</button>
+    <button class="btn btn-green" onclick="exportExcel()">⬇ Excel</button>
+    <button class="btn" onclick="loadData()">⟳ รีเฟรช</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Controls -->
+  <div class="controls">
+    <label>ช่วงเวลา:</label>
+    <div class="tab-group">
+      <button class="active" onclick="setRange('today',this)">วันนี้</button>
+      <button onclick="setRange('week',this)">7 วัน</button>
+      <button onclick="setRange('month',this)">เดือนนี้</button>
+      <button onclick="setRange('all',this)">ทั้งหมด</button>
+    </div>
+    <label>จาก:</label><input type="date" id="dateFrom" />
+    <label>ถึง:</label><input type="date" id="dateTo" />
+    <button class="filter-btn" onclick="applyDateFilter()">กรอง</button>
+    <div class="divider"></div>
+    <label>สถานะ:</label>
+    <select id="statusFilter" onchange="renderAll()"><option value="">ทุกสถานะ</option></select>
+    <label>สายรถ:</label>
+    <select id="routeFilter" onchange="renderAll()"><option value="">ทุกสาย</option></select>
+    <label>อู่:</label>
+    <select id="depotFilter" onchange="renderAll()"><option value="">ทุกอู่</option></select>
+    <label>ประเภท:</label>
+    <select id="typeFilter" onchange="renderAll()"><option value="">ทุกประเภท</option></select>
+    <label>ผู้รับผิดชอบ:</label>
+    <select id="respFilter" onchange="renderAll()"><option value="">ทุกคน</option></select>
+  </div>
+
+  <div id="statusBanner" class="status-banner loading">
+    <span class="spinner"></span> กำลังโหลดข้อมูลจาก Google Sheets…
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="cards" id="cards"></div>
+
+  <!-- Charts Row 1 -->
+  <div class="charts-grid">
+    <div class="chart-box"><h3>สัดส่วนสถานะ</h3><canvas id="pieStatus"></canvas></div>
+    <div class="chart-box"><h3>Media Type</h3><canvas id="pieMedia"></canvas></div>
+    <div class="chart-box"><h3>จำนวนรายการต่อวัน (7 วันล่าสุด)</h3><canvas id="barDaily"></canvas></div>
+  </div>
+  <!-- Charts Row 2 -->
+  <div class="charts-grid">
+    <div class="chart-box"><h3>สินค้า (Top 10)</h3><canvas id="barProduct"></canvas></div>
+    <div class="chart-box"><h3>สภาพตัวถัง</h3><canvas id="pieCondition"></canvas></div>
+    <div class="chart-box"><h3>ตัวถังผุ / สีหลุด</h3><canvas id="pieRust"></canvas></div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-box">
+    <div class="table-box-header">
+      <h3 id="tableTitle">รายละเอียด</h3>
+      <div class="table-actions">
+        <input class="search-input" id="searchInput" placeholder="🔍 ค้นหา ทะเบียน / สินค้า / สาย…" oninput="renderTable()" />
+        <label style="font-size:12px;color:#555;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="alertOnly" onchange="renderTable()" /> ไม่มีสถานะเท่านั้น
+        </label>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th onclick="sortBy('date')">วันที่แจ้ง ↕</th>
+            <th onclick="sortBy('route')">สายรถ</th>
+            <th onclick="sortBy('busNo')">เบอร์รถ</th>
+            <th onclick="sortBy('plate')">ทะเบียน</th>
+            <th onclick="sortBy('mediaType')">Media Type</th>
+            <th onclick="sortBy('depot')">สถานที่อู่</th>
+            <th onclick="sortBy('product')">สินค้า</th>
+            <th onclick="sortBy('type')">ประเภท</th>
+            <th onclick="sortBy('responsible')">ผู้รับผิดชอบ</th>
+            <th onclick="sortBy('status')">สถานะ</th>
+            <th onclick="sortBy('condition')">สภาพตัวถัง</th>
+            <th onclick="sortBy('rust')">ตัวถังผุ/สีหลุด</th>
+            <th onclick="sortBy('removeDate')">วันที่ลอกจริง</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+    <div class="last-updated" id="lastUpdated"></div>
+  </div>
+</div>
+
+<!-- AI Chat Button & Panel -->
+<button id="aiBtn" onclick="toggleAI()" title="ถามข้อมูลด้วย AI">🤖</button>
+<div id="aiPanel">
+  <div class="ai-header">
+    <div>
+      <h4>🤖 AI Assistant</h4>
+      <span>ถามข้อมูล Bus Wrap ได้เลย</span>
+    </div>
+    <button class="ai-close" onclick="toggleAI()">✕</button>
+  </div>
+  <div class="ai-key-bar">
+    <input type="password" id="aiKeyInput" placeholder="ใส่ Gemini API Key (AIza...)" />
+    <button onclick="saveKey()">บันทึก</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg bot"><div class="ai-bubble">สวัสดีครับ! ผมเป็น AI Assistant สำหรับข้อมูล Bus Wrap ของ Plan B Media 🚌\n\nถามอะไรก็ได้ เช่น:\n• "มีงานค้างกี่คัน?"\n• "สายรถไหนมีงานมากที่สุด?"\n• "สินค้า Domino Pizza มีกี่คัน?"</div></div>
+  </div>
+  <div class="ai-chips">
+    <button class="ai-chip" onclick="askQuick('มีงานค้างทั้งหมดกี่คัน?')">งานค้าง?</button>
+    <button class="ai-chip" onclick="askQuick('สายรถไหนมีงานค้างมากที่สุด?')">สายรถค้างสูงสุด</button>
+    <button class="ai-chip" onclick="askQuick('สรุปภาพรวมสถานะทั้งหมด')">สรุปภาพรวม</button>
+    <button class="ai-chip" onclick="askQuick('สินค้าอะไรมีจำนวนมากที่สุด Top 5?')">Top 5 สินค้า</button>
+    <button class="ai-chip" onclick="askQuick('มีกี่คันที่ยังไม่มีสถานะ?')">ไม่มีสถานะ</button>
+  </div>
+  <div class="ai-footer">
+    <input type="text" id="aiInput" placeholder="พิมพ์คำถาม…" onkeydown="if(event.key==='Enter')sendAI()" />
+    <button onclick="sendAI()">ส่ง</button>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">รายละเอียด</h2>
+      <button class="modal-close" onclick="document.getElementById('modalOverlay').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-grid" id="modalBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx-epcGAjfDpb4MhIDxx6Tr-XUkE-N2j0QLMwk6aLXF4fykAd9bT5-5ZrWnKUsLN0Bo-w/exec';
+
+let allData = [], filteredData = [], displayData = [];
+let currentPage = 1;
+const PAGE_SIZE = 50;
+let sortCol = 'date', sortAsc = false;
+let dateRange = 'today';
+const charts = {};
+
+// ── LOAD ──────────────────────────────────────────────
+async function loadData() {
+  setBanner('loading', '⟳ กำลังโหลดข้อมูลจาก Google Sheets…');
+  try {
+    const res = await fetch(GAS_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const raw = await res.json();
+    allData = raw.filter(r => {
+      const plate = r['ทะเบียน'] || '';
+      return plate.trim() !== '';
+    });
+    populateFilters();
+    renderAll();
+    const now = new Date().toLocaleString('th-TH');
+    setBanner('ok', `✅ โหลดข้อมูลสำเร็จ — ${allData.length.toLocaleString()} รายการ | อัปเดตล่าสุด: ${now}`);
+    document.getElementById('lastUpdated').textContent = `ดึงข้อมูลล่าสุด: ${now}`;
+  } catch(e) {
+    setBanner('error', '❌ โหลดไม่สำเร็จ: ' + e.message);
+  }
+}
+function setBanner(type, msg) {
+  const b = document.getElementById('statusBanner');
+  b.className = 'status-banner' + (type==='loading'?' loading':type==='error'?' error':'');
+  b.innerHTML = (type==='loading'?'<span class="spinner"></span> ':'')+msg;
+}
+
+// ── DATE ──────────────────────────────────────────────
+function parseDate(v) {
+  if (!v) return null;
+  if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/)) {
+    const d = new Date(v);
+    return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  const m = String(v).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    let y = parseInt(m[3]); if (y>2400) y-=543; else if(y<100) y+=2000;
+    const d = new Date(y, parseInt(m[2])-1, parseInt(m[1]));
+    return isNaN(d)?null:d;
+  }
+  return null;
+}
+function fmt(d) { return d ? d.toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'}) : '-'; }
+function today()  { const d=new Date(); d.setHours(0,0,0,0); return d; }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function monthStart(){ const d=new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; }
+
+// ── MAP ───────────────────────────────────────────────
+function gf(row, ...keys) {
+  for (const k of keys)
+    for (const rk of Object.keys(row))
+      if (rk.trim().toLowerCase().includes(k.toLowerCase())) return String(row[rk]||'').trim();
+  return '';
+}
+function mapRow(row) {
+  return {
+    seq:        gf(row,'ลำดับ'),
+    date:       parseDate(gf(row,'วันที่แจ้ง')),
+    month:      gf(row,'เดือน'),
+    route:      gf(row,'สายรถ'),
+    busNo:      gf(row,'เบอร์'),
+    plate:      gf(row,'ทะเบียน'),
+    mediaType:  gf(row,'Media Type','media'),
+    depot:      gf(row,'สถานที่อู่','อู่'),
+    busModel:   gf(row,'รุ่นรถ'),
+    product:    gf(row,'สินค้า'),
+    presenter:  gf(row,'พรีเซ็นเตอร์'),
+    type:       gf(row,'ประเภท'),
+    removeDate: parseDate(gf(row,'วันที่ลอกจริง')),
+    team:       gf(row,'ทีมลอก'),
+    responsible:gf(row,'ผู้รับผิดชอบ'),
+    status:     gf(row,'สถานะ'),
+    remarkMA:   gf(row,'Remark MA'),
+    condition:  gf(row,'สภาพตัวถัง'),
+    rust:       gf(row,'ตัวถังผุ','ผุ'),
+    notes:      gf(row,'หมายเหตุ'),
+    remarkAdmin:gf(row,'Remark Admin'),
+    _raw:       row,
+  };
+}
+
+// ── STATUS CLASS ──────────────────────────────────────
+function statusCls(s) {
+  if (!s) return 'nostat';
+  const sl = s.toLowerCase();
+  if (sl.includes('เสร็จ')||sl.includes('done')||sl.includes('complete')||sl.includes('ลอกแล้ว')) return 'done';
+  if (sl.includes('ยกเลิก')||sl.includes('cancel')) return 'cancel';
+  if (sl.includes('กำลัง')||sl.includes('progress')||sl.includes('ดำเนินการ')) return 'inprog';
+  if (sl.includes('รอ')||sl.includes('pending')||sl.includes('wait')) return 'pending';
+  return 'other';
+}
+
+// ── FILTERS ───────────────────────────────────────────
+function populateFilters() {
+  const mapped = allData.map(mapRow);
+  const fill = (id, arr) => {
+    const sel = document.getElementById(id), cur = sel.value;
+    const first = sel.options[0].outerHTML;
+    sel.innerHTML = first + [...new Set(arr.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th')).map(v=>`<option value="${v}">${v}</option>`).join('');
+    if (cur) sel.value = cur;
+  };
+  fill('statusFilter', mapped.map(r=>r.status));
+  fill('routeFilter',  mapped.map(r=>r.route));
+  fill('depotFilter',  mapped.map(r=>r.depot));
+  fill('typeFilter',   mapped.map(r=>r.type));
+  fill('respFilter',   mapped.map(r=>r.responsible));
+}
+
+function getRange() {
+  const t = today();
+  if (dateRange==='today') return [t, addDays(t,1)];
+  if (dateRange==='week')  return [addDays(t,-6), addDays(t,1)];
+  if (dateRange==='month') return [monthStart(), addDays(t,1)];
+  if (dateRange==='custom') {
+    const f=document.getElementById('dateFrom').value, to=document.getElementById('dateTo').value;
+    return [f?new Date(f):new Date('2000-01-01'), to?addDays(new Date(to),1):addDays(t,1)];
+  }
+  return [null,null];
+}
+
+function applyFilters() {
+  const mapped = allData.map(mapRow);
+  const [from,to] = getRange();
+  const sf = document.getElementById('statusFilter').value;
+  const rf = document.getElementById('routeFilter').value;
+  const df = document.getElementById('depotFilter').value;
+  const tf = document.getElementById('typeFilter').value;
+  const pf = document.getElementById('respFilter').value;
+  filteredData = mapped.filter(r => {
+    if (from&&to){ const d=r.date; if(!d||d<from||d>=to) return false; }
+    if (sf && r.status!==sf) return false;
+    if (rf && r.route!==rf)  return false;
+    if (df && r.depot!==df)  return false;
+    if (tf && r.type!==tf)   return false;
+    if (pf && r.responsible!==pf) return false;
+    return true;
+  });
+}
+
+function setRange(r,el) {
+  dateRange=r;
+  document.querySelectorAll('.tab-group button').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
+function applyDateFilter(){ dateRange='custom'; document.querySelectorAll('.tab-group button').forEach(b=>b.classList.remove('active')); renderAll(); }
+
+// ── RENDER ALL ────────────────────────────────────────
+function renderAll() { applyFilters(); renderCards(); renderCharts(); currentPage=1; renderTable(); }
+
+// ── CARDS ─────────────────────────────────────────────
+function renderCards() {
+  const total = filteredData.length;
+  const noStat = filteredData.filter(r=>!r.status).length;
+  const byStatus = {};
+  filteredData.forEach(r=>{ const k=r.status||'(ไม่ระบุ)'; byStatus[k]=(byStatus[k]||0)+1; });
+  const topStatuses = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const rangeName = {today:'วันนี้',week:'7 วันล่าสุด',month:'เดือนนี้',all:'ทั้งหมด',custom:'ช่วงที่เลือก'}[dateRange]||'';
+
+  let h = `
+    <div class="card c-total" onclick="clearStatusFilter()">
+      <div class="card-label">รายการทั้งหมด</div>
+      <div class="card-value">${total.toLocaleString()}</div>
+      <div class="card-sub">${rangeName}</div>
+    </div>
+    <div class="card c-nostat" onclick="filterStatus('')">
+      <div class="card-label"><span class="alert-dot"></span>ไม่มีสถานะ</div>
+      <div class="card-value">${noStat.toLocaleString()}</div>
+      <div class="card-sub">${total?Math.round(noStat/total*100):0}%</div>
+    </div>`;
+  topStatuses.forEach(([s,n])=>{
+    const cls = statusCls(s);
+    h += `<div class="card c-${cls}" onclick="filterStatus('${s}')">
+      <div class="card-label">${s}</div>
+      <div class="card-value">${n.toLocaleString()}</div>
+      <div class="card-sub">${total?Math.round(n/total*100):0}%</div>
+    </div>`;
+  });
+  document.getElementById('cards').innerHTML = h;
+  const rangeLabel = {today:'วันนี้',week:'7 วันล่าสุด',month:'เดือนนี้',all:'ทั้งหมด',custom:'ช่วงที่เลือก'}[dateRange];
+  document.getElementById('tableTitle').textContent = `รายละเอียด — ${rangeLabel} (${total.toLocaleString()} รายการ)`;
+}
+function filterStatus(s){ document.getElementById('statusFilter').value=s; renderAll(); }
+function clearStatusFilter(){ document.getElementById('statusFilter').value=''; renderAll(); }
+
+// ── CHARTS ────────────────────────────────────────────
+const COLORS = ['#1a237e','#2e7d32','#f57f17','#c62828','#0277bd','#6a1b9a','#00695c','#4e342e','#558b2f','#ad1457','#00838f','#ef6c00'];
+
+function makeChart(id, type, labels, data, opts={}) {
+  if (charts[id]) charts[id].destroy();
+  const isMulti = Array.isArray(data) && data.length > 0 && typeof data[0] === 'object' && !Array.isArray(data[0]);
+  const datasets = isMulti ? data : [{
+    label: opts.label || '',
+    data,
+    backgroundColor: type==='bar' ? (opts.color||'#3949ab') : COLORS,
+    borderRadius: type==='bar'?4:0,
+    borderWidth: type==='bar'?0:1,
+  }];
+  charts[id] = new Chart(document.getElementById(id), {
+    type,
+    data: { labels, datasets },
+    options: {
+      plugins: {
+        legend: {
+          display: isMulti || type !== 'bar',
+          position: type==='bar'?'top':'right',
+          labels:{font:{size:10}, boxWidth:12}
+        },
+        tooltip:{}
+      },
+      scales: type==='bar' ? { y:{ beginAtZero:true, ticks:{precision:0, font:{size:10}} }, x:{ticks:{font:{size:10}}} } : undefined,
+      maintainAspectRatio: true,
+      ...opts.extra,
+    }
+  });
+}
+
+function countBy(arr, fn) {
+  const m={};
+  arr.forEach(r=>{ const k=fn(r)||'(ไม่ระบุ)'; m[k]=(m[k]||0)+1; });
+  return m;
+}
+
+function renderCharts() {
+  // Status pie
+  const byStatus = countBy(filteredData, r=>r.status||'(ไม่ระบุ)');
+  makeChart('pieStatus','doughnut',Object.keys(byStatus),Object.values(byStatus));
+
+  // Media Type pie
+  const byMedia = countBy(filteredData, r=>r.mediaType);
+  makeChart('pieMedia','doughnut',Object.keys(byMedia),Object.values(byMedia));
+
+  // Daily bar (7 days, all data) — grouped เสร็จ vs รอ
+  const all7 = allData.map(mapRow);
+  const days=[]; for(let i=6;i>=0;i--) days.push(addDays(today(),-i));
+  const dayLabels = days.map(d=>d.toLocaleDateString('th-TH',{month:'short',day:'numeric'}));
+  const dayDone    = days.map(d=>{ const nx=addDays(d,1); return all7.filter(r=>r.removeDate&&r.removeDate>=d&&r.removeDate<nx&&statusCls(r.status)==='done').length; });
+  const dayPending = days.map(d=>{ const nx=addDays(d,1); return all7.filter(r=>r.removeDate&&r.removeDate>=d&&r.removeDate<nx&&statusCls(r.status)!=='done').length; });
+  makeChart('barDaily','bar',dayLabels,[
+    {label:'เสร็จ', data:dayDone, backgroundColor:'#2e7d32', borderRadius:4, borderWidth:0},
+    {label:'รอ',    data:dayPending, backgroundColor:'#e53935', borderRadius:4, borderWidth:0},
+  ]);
+
+  // Product top 10
+  const byProd = countBy(filteredData, r=>r.product);
+  const topProd = Object.entries(byProd).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  makeChart('barProduct','bar',topProd.map(x=>x[0]),topProd.map(x=>x[1]),{color:'#00695c',extra:{indexAxis:'y',plugins:{legend:{display:false}}}});
+
+  // Condition pie
+  const byCond = countBy(filteredData, r=>r.condition);
+  makeChart('pieCondition','doughnut',Object.keys(byCond),Object.values(byCond));
+
+  // Rust pie
+  const byRust = countBy(filteredData, r=>r.rust);
+  makeChart('pieRust','doughnut',Object.keys(byRust),Object.values(byRust));
+}
+
+// ── TABLE ─────────────────────────────────────────────
+function sortBy(col) { if(sortCol===col) sortAsc=!sortAsc; else{sortCol=col;sortAsc=true;} renderTable(); }
+
+function renderTable() {
+  const search = (document.getElementById('searchInput').value||'').toLowerCase();
+  const alertOnly = document.getElementById('alertOnly').checked;
+  let data = [...filteredData];
+  if (search) data = data.filter(r=>[r.plate,r.product,r.route,r.depot,r.responsible,r.status,r.busNo,r.mediaType].some(v=>(v||'').toLowerCase().includes(search)));
+  if (alertOnly) data = data.filter(r=>!r.status);
+
+  data.sort((a,b)=>{
+    let av=a[sortCol], bv=b[sortCol];
+    if (av instanceof Date && bv instanceof Date) return sortAsc?av-bv:bv-av;
+    av=av||''; bv=bv||'';
+    return sortAsc?String(av).localeCompare(String(bv),'th'):String(bv).localeCompare(String(av),'th');
+  });
+
+  displayData = data;
+  const total=data.length, pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
+  if(currentPage>pages) currentPage=pages;
+  const slice=data.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+
+  const tbody=document.getElementById('tableBody');
+  if (!slice.length) { tbody.innerHTML=`<tr><td colspan="15" class="no-data">ไม่พบข้อมูล</td></tr>`; }
+  else {
+    tbody.innerHTML = slice.map((r,i)=>{
+      const noStat = !r.status;
+      const sc = statusCls(r.status);
+      return `<tr class="${noStat?'no-status':''}" onclick="openModal(${(currentPage-1)*PAGE_SIZE+i})">
+        <td style="color:#aaa">${(currentPage-1)*PAGE_SIZE+i+1}</td>
+        <td>${fmt(r.date)}</td>
+        <td>${r.route||'-'}</td>
+        <td>${r.busNo||'-'}</td>
+        <td><strong>${r.plate||'-'}</strong></td>
+        <td>${r.mediaType||'-'}</td>
+        <td>${r.depot||'-'}</td>
+        <td>${r.product||'-'}</td>
+        <td>${r.type||'-'}</td>
+        <td>${r.responsible||'-'}</td>
+        <td>${noStat?'<span class="badge badge-nostat"><span class="alert-dot"></span>ไม่มีสถานะ</span>':`<span class="badge badge-${sc}">${r.status}</span>`}</td>
+        <td>${r.condition||'-'}</td>
+        <td>${r.rust||'-'}</td>
+        <td>${fmt(r.removeDate)}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" title="${r.notes}">${r.notes||'-'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Pagination
+  let ph = `<span style="color:#888;font-size:11px">${total.toLocaleString()} รายการ</span>`;
+  ph += `<button onclick="changePage(${currentPage-1})" ${currentPage===1?'disabled':''}>‹</button>`;
+  const s=Math.max(1,currentPage-2), e=Math.min(pages,currentPage+2);
+  for(let p=s;p<=e;p++) ph+=`<button class="${p===currentPage?'active':''}" onclick="changePage(${p})">${p}</button>`;
+  ph += `<button onclick="changePage(${currentPage+1})" ${currentPage===pages?'disabled':''}>›</button>`;
+  document.getElementById('pagination').innerHTML = ph;
+}
+function changePage(p){ currentPage=p; renderTable(); }
+
+// ── MODAL ─────────────────────────────────────────────
+function openModal(idx) {
+  const r = displayData[idx];
+  if (!r) return;
+  document.getElementById('modalTitle').textContent = `ทะเบียน ${r.plate||'-'} — ${r.product||'-'}`;
+  const sc = statusCls(r.status);
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-section">ข้อมูลรถ</div>
+    ${mf('สายรถ',r.route)} ${mf('เบอร์รถ',r.busNo)}
+    ${mf('ทะเบียน','<strong>'+r.plate+'</strong>')} ${mf('รุ่นรถ',r.busModel)}
+    ${mf('Media Type',r.mediaType)} ${mf('สถานที่อู่',r.depot)}
+    <div class="modal-section">ข้อมูลสินค้า</div>
+    ${mf('สินค้า',r.product)} ${mf('พรีเซ็นเตอร์',r.presenter)}
+    ${mf('ประเภท',r.type)} ${mf('วันที่แจ้ง',fmt(r.date))}
+    <div class="modal-section">สถานะ & การดำเนินการ</div>
+    ${mf('สถานะ',r.status?`<span class="badge badge-${sc}">${r.status}</span>`:'<span class="badge badge-nostat">ไม่มีสถานะ</span>')}
+    ${mf('ทีมลอก',r.team)} ${mf('ผู้รับผิดชอบ',r.responsible)} ${mf('วันที่ลอกจริง',fmt(r.removeDate))}
+    <div class="modal-section">สภาพตัวถัง</div>
+    ${mf('สภาพตัวถัง',r.condition)} ${mf('ตัวถังผุ/สีหลุด',r.rust)}
+    <div class="modal-section">หมายเหตุ</div>
+    ${mf('Remark MA',r.remarkMA,'full')} ${mf('หมายเหตุ',r.notes,'full')} ${mf('Remark Admin',r.remarkAdmin,'full')}
+  `;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+function mf(label, value, cls='') {
+  return `<div class="modal-field ${cls}"><div class="modal-field-label">${label}</div><div class="modal-field-value">${value||'-'}</div></div>`;
+}
+function closeModal(e){ if(e.target===document.getElementById('modalOverlay')) document.getElementById('modalOverlay').classList.remove('open'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.getElementById('modalOverlay').classList.remove('open'); });
+
+// ── EXPORT ────────────────────────────────────────────
+function getExportData() {
+  const search = (document.getElementById('searchInput').value||'').toLowerCase();
+  const alertOnly = document.getElementById('alertOnly').checked;
+  let data = [...filteredData];
+  if (search) data = data.filter(r=>[r.plate,r.product,r.route,r.depot,r.responsible,r.status,r.busNo,r.mediaType].some(v=>(v||'').toLowerCase().includes(search)));
+  if (alertOnly) data = data.filter(r=>!r.status);
+  return data;
+}
+
+function exportCSV() {
+  const data = getExportData();
+  const headers = ['ลำดับ','วันที่แจ้ง','สายรถ','เบอร์รถ','ทะเบียน','Media Type','สถานที่อู่','รุ่นรถ','สินค้า','พรีเซ็นเตอร์','ประเภท','ทีมลอก','ผู้รับผิดชอบ','สถานะ','สภาพตัวถัง','ตัวถังผุ/สีหลุด','วันที่ลอกจริง','Remark MA','หมายเหตุ','Remark Admin'];
+  const rows = data.map(r=>[r.seq,fmt(r.date),r.route,r.busNo,r.plate,r.mediaType,r.depot,r.busModel,r.product,r.presenter,r.type,r.team,r.responsible,r.status,r.condition,r.rust,fmt(r.removeDate),r.remarkMA,r.notes,r.remarkAdmin].map(v=>'"'+(v||'').replace(/"/g,'""')+'"').join(','));
+  const csv = '﻿' + [headers.join(','), ...rows].join('\n');
+  download(csv, `bus-wrap-${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8');
+}
+
+function exportExcel() {
+  const data = getExportData();
+  const headers = ['ลำดับ','วันที่แจ้ง','สายรถ','เบอร์รถ','ทะเบียน','Media Type','สถานที่อู่','รุ่นรถ','สินค้า','พรีเซ็นเตอร์','ประเภท','ทีมลอก','ผู้รับผิดชอบ','สถานะ','สภาพตัวถัง','ตัวถังผุ/สีหลุด','วันที่ลอกจริง','Remark MA','หมายเหตุ','Remark Admin'];
+  const rows = data.map(r=>[r.seq,fmt(r.date),r.route,r.busNo,r.plate,r.mediaType,r.depot,r.busModel,r.product,r.presenter,r.type,r.team,r.responsible,r.status,r.condition,r.rust,fmt(r.removeDate),r.remarkMA,r.notes,r.remarkAdmin]);
+  let xml = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>`;
+  xml += '<Row>'+headers.map(h=>`<Cell><Data ss:Type="String">${h}</Data></Cell>`).join('')+'</Row>';
+  rows.forEach(row=>{ xml+='<Row>'+row.map(v=>`<Cell><Data ss:Type="String">${(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</Data></Cell>`).join('')+'</Row>'; });
+  xml += '</Table></Worksheet></Workbook>';
+  download(xml, `bus-wrap-${new Date().toISOString().slice(0,10)}.xls`, 'application/vnd.ms-excel;charset=utf-8');
+}
+
+function download(content, filename, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:mime}));
+  a.download = filename; a.click();
+}
+
+// ── AI CHAT ───────────────────────────────────────────
+let aiKey = localStorage.getItem('ai_key') || '';
+function toggleAI() {
+  const p = document.getElementById('aiPanel');
+  p.classList.toggle('open');
+  if (p.classList.contains('open')) {
+    document.getElementById('aiKeyInput').value = aiKey ? '••••••••••••' : '';
+    document.getElementById('aiInput').focus();
+  }
+}
+function saveKey() {
+  const v = document.getElementById('aiKeyInput').value.trim();
+  if (v && !v.startsWith('•')) { aiKey = v; localStorage.setItem('ai_key', v); }
+  alert(aiKey ? '✅ บันทึก API Key แล้ว' : '❌ ยังไม่มี API Key');
+}
+
+function buildContext() {
+  const total = allData.length;
+  const mapped = allData.map(mapRow);
+  const done = mapped.filter(r=>statusCls(r.status)==='done').length;
+  const pending = total - done;
+  const noStat = mapped.filter(r=>!r.status).length;
+
+  const byRoute = {};
+  mapped.forEach(r=>{ const k=r.route||'(ไม่ระบุ)'; byRoute[k]=(byRoute[k]||0)+1; });
+  const topRoutes = Object.entries(byRoute).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>`${k}: ${v}`).join(', ');
+
+  const byProd = {};
+  mapped.forEach(r=>{ const k=r.product||'(ไม่ระบุ)'; byProd[k]=(byProd[k]||0)+1; });
+  const topProds = Object.entries(byProd).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>`${k}: ${v}`).join(', ');
+
+  const byStatus = {};
+  mapped.forEach(r=>{ const k=r.status||'(ไม่มีสถานะ)'; byStatus[k]=(byStatus[k]||0)+1; });
+  const statusSummary = Object.entries(byStatus).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join(', ');
+
+  const byMedia = {};
+  mapped.forEach(r=>{ const k=r.mediaType||'(ไม่ระบุ)'; byMedia[k]=(byMedia[k]||0)+1; });
+  const mediaSummary = Object.entries(byMedia).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}: ${v}`).join(', ');
+
+  const byDepot = {};
+  mapped.forEach(r=>{ const k=r.depot||'(ไม่ระบุ)'; byDepot[k]=(byDepot[k]||0)+1; });
+  const topDepots = Object.entries(byDepot).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=>`${k}: ${v}`).join(', ');
+
+  return `คุณคือ AI Assistant สำหรับระบบติดตามงานรื้อถอนภาพโฆษณา Bus Wrap ของ Plan B Media
+ข้อมูล ณ ปัจจุบัน:
+- จำนวนงานทั้งหมด: ${total} คัน (นับเฉพาะที่มีเลขทะเบียน)
+- เสร็จแล้ว: ${done} คัน (${total?Math.round(done/total*100):0}%)
+- รอดำเนินการ: ${pending} คัน (${total?Math.round(pending/total*100):0}%)
+- ไม่มีสถานะ: ${noStat} คัน
+- สถานะทั้งหมด: ${statusSummary}
+- Media Type: ${mediaSummary}
+- สายรถ (Top 10): ${topRoutes}
+- สินค้า (Top 10): ${topProds}
+- อู่ (Top 10): ${topDepots}
+
+ตอบเป็นภาษาไทย กระชับ ชัดเจน ใช้ตัวเลขจากข้อมูลด้านบน`;
+}
+
+function addMsg(role, text) {
+  const box = document.getElementById('aiMessages');
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}`;
+  div.innerHTML = `<div class="ai-bubble">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+async function sendAI() {
+  const inp = document.getElementById('aiInput');
+  const q = inp.value.trim();
+  if (!q) return;
+  if (!aiKey) { alert('กรุณาใส่ Anthropic API Key ก่อนครับ\n(กดปุ่ม "บันทึก" หลังใส่ key)'); return; }
+  inp.value = '';
+  addMsg('user', q);
+
+  const typing = addMsg('bot', '⟳ กำลังคิด…');
+  typing.querySelector('.ai-bubble').className += ' ai-typing';
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${aiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: buildContext() }] },
+        contents: [{ role: 'user', parts: [{ text: q }] }],
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+      }),
+    });
+    const json = await res.json();
+    typing.remove();
+    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (text) {
+      addMsg('bot', text);
+    } else {
+      addMsg('bot', '❌ ไม่ได้รับคำตอบ: ' + (json.error?.message || JSON.stringify(json)));
+    }
+  } catch(e) {
+    typing.remove();
+    addMsg('bot', '❌ เกิดข้อผิดพลาด: ' + e.message);
+  }
+}
+
+function askQuick(q) {
+  document.getElementById('aiInput').value = q;
+  sendAI();
+}
+
+// ── INIT ──────────────────────────────────────────────
+const t = new Date();
+document.getElementById('dateTo').value = t.toISOString().split('T')[0];
+const w = new Date(t); w.setDate(w.getDate()-6);
+document.getElementById('dateFrom').value = w.toISOString().split('T')[0];
+
+loadData();
+setInterval(loadData, 5*60*1000);
+</script>
+</body>
+</html>
